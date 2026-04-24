@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件夹管理系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        /* 登录页 */
+        .login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 360px; }
+        .login-box h1 { text-align: center; margin-bottom: 30px; color: #333; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #666; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+        .btn-primary { background: #6366f1; color: white; }
+        .btn-primary:hover { background: #4f46e5; }
+        .btn-secondary { background: #e5e7eb; color: #333; }
+        .tabs { display: flex; margin-bottom: 20px; }
+        .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; border-bottom: 2px solid #ddd; }
+        .tab.active { border-color: #6366f1; color: #6366f1; }
+        
+        /* 头部 */
+        .header { background: white; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 24px; border-radius: 12px; }
+        .header h1 { font-size: 20px; color: #333; }
+        .header-user { display: flex; align-items: center; gap: 16px; }
+        .header-user span { color: #666; }
+        .logout-btn { padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        
+        /* 卡片 */
+        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: #333; }
+        
+        /* 文件夹网格 */
+        .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .folder-card { background: white; border-radius: 12px; padding: 20px; border: 2px solid transparent; cursor: pointer; transition: all 0.3s; }
+        .folder-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .folder-card.complete { border-color: #22c55e; }
+        .folder-card.partial { border-color: #f59e0b; }
+        .folder-card.pending { border-color: #ef4444; }
+        .folder-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .folder-name { font-size: 16px; font-weight: 600; color: #333; }
+        .folder-badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; }
+        .badge-complete { background: #dcfce7; color: #22c55e; }
+        .badge-partial { background: #fef3c7; color: #f59e0b; }
+        .badge-pending { background: #fee2e2; color: #ef4444; }
+        .badge-empty { background: #f3f4f6; color: #6b7280; }
+        .folder-stats { display: flex; gap: 16px; color: #666; font-size: 14px; }
+        .folder-actions { margin-top: 12px; display: flex; gap: 8px; }
+        .btn-small { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .btn-edit { background: #e0e7ff; color: #6366f1; }
+        .btn-delete { background: #fee2e2; color: #ef4444; }
+        
+        /* 模态框 */
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: white; padding: 32px; border-radius: 16px; width: 500px; max-width: 90%; }
+        .modal-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+        .modal-btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; }
+        .modal-btn-primary { background: #6366f1; color: white; }
+        .modal-btn-secondary { background: #e5e7eb; color: #333; }
+        
+        /* 文件列表 */
+        .file-list { margin-top: 16px; }
+        .file-item { display: flex; align-items: center; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; }
+        .file-item.uploaded { border-color: #22c55e; background: #f0fdf4; }
+        .file-icon { width: 40px; height: 40px; background: #e0e7ff; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-right: 16px; font-size: 20px; }
+        .file-info { flex: 1; }
+        .file-name { font-weight: 600; color: #333; margin-bottom: 4px; }
+        .file-desc { font-size: 12px; color: #666; }
+        .file-meta { text-align: right; font-size: 12px; color: #666; }
+        .file-upload-btn { margin-left: 16px; }
+        .file-status { padding: 4px 12px; border-radius: 12px; font-size: 12px; }
+        .status-done { background: #dcfce7; color: #22c55e; }
+        .status-pending { background: #fef3c7; color: #f59e0b; }
+        
+        /* 返回按钮 */
+        .back-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #e5e7eb; border-radius: 8px; cursor: pointer; margin-bottom: 20px; }
+        .back-btn:hover { background: #d1d5db; }
+        
+        /* 导航标签 */
+        .nav-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+        .nav-tab { padding: 12px 24px; background: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; color: #666; }
+        .nav-tab.active { background: #6366f1; color: white; }
+        
+        /* 上传区域 */
+        .upload-zone { border: 2px dashed #d1d5db; border-radius: 12px; padding: 40px; text-align: center; margin-top: 16px; cursor: pointer; }
+        .upload-zone:hover { border-color: #6366f1; background: #f5f3ff; }
+        
+        /* 添加按钮 */
+        .add-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 16px; }
+        .add-btn:hover { background: #4f46e5; }
+        
+        /* 我的上传 */
+        .upload-table { width: 100%; border-collapse: collapse; }
+        .upload-table th, .upload-table td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        .upload-table th { background: #f9fafb; font-weight: 600; color: #666; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 登录页 -->
+        <div v-if="!isLoggedIn" class="login-page">
+            <div class="login-box">
+                <h1>文件夹管理系统</h1>
+                <div class="tabs">
+                    <div class="tab" :class="{active: loginType === 'login'}" @click="loginType = 'login'">登录</div>
+                    <div class="tab" :class="{active: loginType === 'register'}" @click="loginType = 'register'">注册</div>
+                </div>
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input v-model="username" type="text" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input v-model="password" type="password" placeholder="请输入密码">
+                </div>
+                <button class="btn btn-primary" @click="loginType === 'login' ? login() : register()">
+                    {{ loginType === 'login' ? '登录' : '注册' }}
+                </button>
+                <p style="text-align:center;margin-top:16px;font-size:12px;color:#666;">
+                    默认账号: admin / admin123 或 member1 / member123
+                </p>
+            </div>
+        </div>
+        
+        <!-- 主页面 -->
+        <div v-else class="container">
+            <div class="header">
+                <h1>📁 文件夹管理系统</h1>
+                <div class="header-user">
+                    <span>欢迎，{{ currentUser.username }} ({{ currentUser.role === 'admin' ? '管理员' : '成员' }})</span>
+                    <button class="logout-btn" @click="logout">退出登录</button>
+                </div>
+            </div>
+            
+            <div class="nav-tabs">
+                <button class="nav-tab" :class="{active: currentView === 'folders'}" @click="currentView = 'folders'">📂 文件夹管理</button>
+                <button class="nav-tab" :class="{active: currentView === 'my-uploads'}" @click="currentView = 'my-uploads'; getMyUploads()">📤 我的上传</button>
+            </div>
+            
+            <!-- 文件夹列表 -->
+            <div v-if="currentView === 'folders'">
+                <button v-if="currentUser.role === 'admin'" class="add-btn" @click="showFolderModal = true">
+                    ➕ 添加文件夹
+                </button>
+                
+                <div class="folder-grid">
+                    <div v-for="folder in folders" :key="folder.id" class="folder-card" :class="'folder-card.' + folder.status" @click="viewFolder(folder)">
+                        <div class="folder-card-header">
+                            <span class="folder-name">{{ folder.level === 1 ? '📁' : '📂' }} {{ folder.name }}</span>
+                            <span class="folder-badge" :class="'badge-' + folder.status">
+                                {{ folder.status === 'complete' ? '已完成' : folder.status === 'partial' ? '进行中' : folder.status === 'pending' ? '待上传' : '空' }}
+                            </span>
+                        </div>
+                        <div class="folder-stats">
+                            <span>总文件: {{ folder.total_files }}</span>
+                            <span>已上传: {{ folder.uploaded_files }}</span>
+                            <span>必传: {{ folder.required_uploaded }}/{{ folder.required_files }}</span>
+                        </div>
+                        <div v-if="currentUser.role === 'admin'" class="folder-actions">
+                            <button class="btn-small btn-edit" @click.stop="editFolder(folder)">编辑</button>
+                            <button class="btn-small btn-delete" @click.stop="deleteFolder(folder.id)">删除</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 我的上传 -->
+            <div v-if="currentView === 'my-uploads'" class="card">
+                <div class="card-title">📤 我的上传记录</div>
+                <table class="upload-table">
+                    <thead>
+                        <tr>
+                            <th>文件名</th>
+                            <th>文件夹</th>
+                            <th>大小</th>
+                            <th>上传时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="upload in myUploads" :key="upload.id">
+                            <td>{{ upload.filename }}</td>
+                            <td>{{ upload.folder_name }}</td>
+                            <td>{{ formatSize(upload.file_size) }}</td>
+                            <td>{{ upload.uploaded_at }}</td>
+                            <td><button class="btn-small btn-delete" @click="deleteMyUpload(upload.id)">删除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div v-if="myUploads.length === 0" style="text-align:center;padding:40px;color:#666;">暂无上传记录</div>
+            </div>
+            
+            <!-- 文件夹详情 -->
+            <div v-if="currentView === 'folder-detail'" class="card">
+                <div class="back-btn" @click="currentView = 'folders'">← 返回</div>
+                <div class="card-title">📂 {{ currentFolder.name }}</div>
+                
+                <button v-if="currentUser.role === 'admin'" class="add-btn" @click="showFileModal = true">
+                    ➕ 添加文件清单
+                </button>
+                
+                <div class="file-list">
+                    <div v-for="file in fileList" :key="file.id" class="file-item" :class="{uploaded: file.uploaded}">
+                        <div class="file-icon">📄</div>
+                        <div class="file-info">
+                            <div class="file-name">{{ file.filename }}</div>
+                            <div class="file-desc">{{ file.description || '无描述' }}</div>
+                            <div v-if="file.uploaded" style="font-size:12px;color:#22c55e;margin-top:4px;">
+                                已上传: {{ file.uploader }} ({{ file.uploaded_at }})
+                            </div>
+                        </div>
+                        <div class="file-meta">
+                            <span v-if="file.required" style="color:#ef4444;">*必传</span>
+                            <div class="file-status" :class="file.uploaded ? 'status-done' : 'status-pending'">
+                                {{ file.uploaded ? '已上传' : '待上传' }}
+                            </div>
+                        </div>
+                        <div class="file-upload-btn">
+                            <label class="btn-small btn-primary" style="background:#6366f1;color:white;display:inline-block;padding:6px 12px;border-radius:6px;cursor:pointer;">
+                                上传
+                                <input type="file" :ref="'file_' + file.id" @change="uploadFile(file.id)" style="display:none;">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div v-if="fileList.length === 0" style="text-align:center;padding:40px;color:#666;">暂无文件清单</div>
+            </div>
+        </div>
+        
+        <!-- 添加文件夹模态框 -->
+        <div v-if="showFolderModal" class="modal" @click.self="showFolderModal = false">
+            <div class="modal-content">
+                <div class="modal-title">{{ editingFolder ? '编辑文件夹' : '添加文件夹' }}</div>
+                <div class="form-group">
+                    <label>文件夹名称</label>
+                    <input v-model="folderForm.name" type="text" placeholder="请输入文件夹名称">
+                </div>
+                <div class="form-group">
+                    <label>父级文件夹（可选，留空为一级目录）</label>
+                    <select v-model="folderForm.parent_id" style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;">
+                        <option :value="null">无（顶级目录）</option>
+                        <option v-for="f in folders.filter(x => x.level === 1)" :key="f.id" :value="f.id">{{ f.name }}</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" @click="showFolderModal = false">取消</button>
+                    <button class="modal-btn modal-btn-primary" @click="saveFolder">保存</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 添加文件清单模态框 -->
+        <div v-if="showFileModal" class="modal" @click.self="showFileModal = false">
+            <div class="modal-content">
+                <div class="modal-title">添加文件清单</div>
+                <div class="form-group">
+                    <label>文件名（含扩展名）</label>
+                    <input v-model="fileForm.filename" type="text" placeholder="如：项目计划书.docx">
+                </div>
+                <div class="form-group">
+                    <label>文件描述</label>
+                    <input v-model="fileForm.description" type="text" placeholder="请输入文件描述">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input v-model="fileForm.required" type="checkbox" :checked="fileForm.required === 1">
+                        是否必传
+                    </label>
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" @click="showFileModal = false">取消</button>
+                    <button class="modal-btn modal-btn-primary" @click="saveFileList">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+        
+        createApp({
+            setup() {
+                const API_BASE = '/api';
+                
+                const isLoggedIn = ref(false);
+                const currentUser = ref({});
+                const username = ref('');
+                const password = ref('');
+                const loginType = ref('login');
+                const token = ref(localStorage.getItem('token') || '');
+                
+                const currentView = ref('folders');
+                const folders = ref([]);
+                const currentFolder = ref({});
+                const fileList = ref([]);
+                const myUploads = ref([]);
+                
+                const showFolderModal = ref(false);
+                const showFileModal = ref(false);
+                const editingFolder = ref(null);
+                const folderForm = ref({ name: '', parent_id: null });
+                const fileForm = ref({ filename: '', description: '', required: 1 });
+                
+                const api = axios.create({
+                    baseURL: API_BASE,
+                    headers: { Authorization: `Bearer ${token.value}` }
+                });
+                
+                const checkAuth = async () => {
+                    if (token.value) {
+                        try {
+                            const res = await api.get('/auth/me');
+                            currentUser.value = res.data;
+                            isLoggedIn.value = true;
+                            getFolders();
+                        } catch (e) {
+                            localStorage.removeItem('token');
+                            token.value = '';
+                        }
+                    }
+                };
+                
+                const login = async () => {
+                    try {
+                        const res = await api.post('/auth/login', { username: username.value, password: password.value });
+                        token.value = res.data.access_token;
+                        localStorage.setItem('token', token.value);
+                        api.defaults.headers.Authorization = `Bearer ${token.value}`;
+                        await checkAuth();
+                    } catch (e) {
+                        alert(e.response?.data?.detail || '登录失败');
+                    }
+                };
+                
+                const register = async () => {
+                    try {
+                        await api.post('/auth/register', { username: username.value, password: password.value });
+                        alert('注册成功，请登录');
+                        loginType.value = 'login';
+                    } catch (e) {
+                        alert(e.response?.data?.detail || '注册失败');
+                    }
+                };
+                
+                const logout = () => {
+                    localStorage.removeItem('token');
+                    token.value = '';
+                    isLoggedIn.value = false;
+                    currentUser.value = {};
+                    currentView.value = 'folders';
+                };
+                
+                const getFolders = async () => {
+                    try {
+                        const res = await api.get('/folders');
+                        folders.value = res.data;
+                    } catch (e) {
+                        console.error(e);
+                    }
+                };
+                
+                const viewFolder = async (folder) => {
+                    currentFolder.value = folder;
+                    currentView.value = 'folder-detail';
+                    try {
+                        const res = await api.get(`/folders/${folder.id}/file-list`);
+                        fileList.value = res.data;
+                    } catch (e) {
+                        console.error(e);
+                    }
+                };
+                
+                const editFolder = (folder) => {
+                    editingFolder.value = folder;
+                    folderForm.value = { name: folder.name, parent_id: folder.parent_id };
+                    showFolderModal.value = true;
+                };
+                
+                const saveFolder = async () => {
+                    try {
+                        if (editingFolder.value) {
+                            await api.put(`/folders/${editingFolder.value.id}`, folderForm.value);
+                        } else {
+                            await api.post('/folders', folderForm.value);
+                        }
+                        showFolderModal.value = false;
+                        editingFolder.value = null;
+                        folderForm.value = { name: '', parent_id: null };
+                        getFolders();
+                    } catch (e) {
+                        alert(e.response?.data?.detail || '保存失败');
+                    }
+                };
+                
+                const deleteFolder = async (id) => {
+                    if (!confirm('确定删除？')) return;
+                    try {
+                        await api.delete(`/folders/${id}`);
+                        getFolders();
+                    } catch (e) {
+                        alert(e.response?.data?.detail || '删除失败');
+                    }
+                };
+                
+                const saveFileList = async () => {
+                    try {
+                        await api.post(`/folders/${currentFolder.value.id}/file-list`, {
+                            ...fileForm.value,
+                            required: fileForm.value.required ? 1 : 0
+                        });
+                        showFileModal.value = false;
+                        fileForm.value = { filename: '', description: '', required: 1 };
+                        viewFolder(currentFolder.value);
+                    } catch (e) {
+                        alert(e.response?.data?.detail || '保存失败');
+                    }
+                };
+                
+                const uploadFile = async (fileListId) => {
+                    const input = document.querySelector(`input[type="file"][ref="file_${fileListId}"]`) || 
+                                  document.querySelector(`[data-ref="file_${fileListId}"]`) ||
+                                  event.target;
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    try {
+                        await api.post(`/uploads/${fileListId}`, formData, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                        alert('上传成功');
+                        viewFolder(currentFolder.value);
+                    } catch (e) {
+                        alert(e.response?.data?.detail || '上传失败');
+                    }
+                };
+                
+                const getMyUploads = async () => {
+                    try {
+                        const res = await api.get('/my-uploads');
+                        myUploads.value = res.data;
+                    } catch (e) {
+                        console.error(e);
+                    }
+                };
+                
+                const deleteMyUpload = async (id) => {
+                    if (!confirm('确定删除？')) return;
+                    try {
+                        await api.delete(`/uploads/${id}`);
+                        getMyUploads();
+                    } catch (e) {
+                        alert(e.response?.data?.detail || '删除失败');
+                    }
+                };
+                
+                const formatSize = (bytes) => {
+                    if (!bytes) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                };
+                
+                onMounted(() => {
+                    checkAuth();
+                });
+                
+                return {
+                    isLoggedIn, currentUser, username, password, loginType,
+                    currentView, folders, currentFolder, fileList, myUploads,
+                    showFolderModal, showFileModal, editingFolder, folderForm, fileForm,
+                    login, register, logout, getFolders, viewFolder, editFolder,
+                    saveFolder, deleteFolder, saveFileList, uploadFile, getMyUploads, deleteMyUpload,
+                    formatSize
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
